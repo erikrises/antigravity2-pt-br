@@ -1,0 +1,24 @@
+{
+  "name": "antigravity-ptbr",
+  "version": "1.0.0",
+  "description": "Pacote de tradução e localização em Português do Brasil (pt-BR) para o Google Antigravity",
+  "keywords": [
+    "antigravity",
+    "pt-br",
+    "translation",
+    "localization",
+    "portuguese",
+    "brasil",
+    "electron"
+  ],
+  "license": "MIT",
+  "main": "localization_engine.js",
+  "scripts": {
+    "install:ptbr": "node localization_engine.js",
+    "restore": "node localization_engine.js --restore",
+    "test:dicts": "node -e \"const fs=require('fs'),path=require('path');const dir='./dicts';fs.readdirSync(dir).filter(f=>f.endsWith('.json')).forEach(f=>{JSON.parse(fs.readFileSync(path.join(dir,f),'utf8'));console.log(f, 'OK');});\""
+  },
+  "dependencies": {
+    "@electron/asar": "^3.4.1"
+  }
+}

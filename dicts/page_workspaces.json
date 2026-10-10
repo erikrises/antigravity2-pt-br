@@ -1,0 +1,7 @@
+{
+    "Loading conversation...": "Carregando conversa...",
+    "Failed to load conversation": "Falha ao carregar conversa",
+    "Failed to delete conversation": "Falha ao excluir conversa",
+    "Conversation History": "Histórico de Conversas",
+    "When enabled, this agent will be able to access past conversations to inform its responses.": "Quando ativado, este agente poderá acessar conversas anteriores para embasar suas respostas."
+}
