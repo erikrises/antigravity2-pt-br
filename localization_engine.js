@@ -196,6 +196,34 @@ function buildPreloadScript(dictionary) {
                 }
             }
 
+            // Nível/potência de modelos (ex: "Gemini 3.8 Flash High" -> "Gemini 3.8 Flash Alta")
+            if (!replacement) {
+                const modelTierMatch = trimmed.match(/^(.+?)(\\s+)(\\(?(?:High|Medium|Low|Minimal)\\)?)$/i);
+                if (modelTierMatch) {
+                    const prefix = modelTierMatch[1];
+                    const space = modelTierMatch[2];
+                    const tier = modelTierMatch[3];
+                    const tierClean = tier.replace(/[()]/g, '');
+                    const tierMap = {
+                        'High': 'Alta', 'high': 'Alta',
+                        'Medium': 'Média', 'medium': 'Média',
+                        'Low': 'Baixa', 'low': 'Baixa',
+                        'Minimal': 'Mínima', 'minimal': 'Mínima'
+                    };
+                    if (tierMap[tierClean]) {
+                        const isLikelyModel = 
+                            /(\\b(?:Flash|Pro|Sonnet|Opus|Haiku|GPT|Preview|Thinking|Gemini|Claude|DeepSeek|Llama|Qwen|Mistral|Codestral|o1|o3|o4|Model|OSS)\\b)/i.test(prefix) ||
+                            (node.parentElement && node.parentElement.closest && !!node.parentElement.closest('[aria-label*=\"model\" i], [aria-label*=\"modelo\" i], [class*=\"model\" i], [id*=\"model\" i], [data-testid*=\"model\" i], button, [role=\"button\"], [role=\"menuitem\"], [role=\"option\"]'));
+
+                        if (isLikelyModel) {
+                            const translatedTier = tier.startsWith('(') ? '(' + tierMap[tierClean] + ')' : tierMap[tierClean];
+                            const translatedPrefix = map.get(prefix) || prefix;
+                            replacement = translatedPrefix + space + translatedTier;
+                        }
+                    }
+                }
+            }
+
             if (replacement && replacement !== trimmed) {
                 translatedNodes.add(node);
                 isMutating = true;
@@ -213,10 +241,14 @@ function buildPreloadScript(dictionary) {
             for (const attr of ['placeholder', 'title', 'aria-label']) {
                 const val = el.getAttribute(attr);
                 if (val && /[a-zA-Z]/.test(val)) {
-                    if (attr === 'aria-label' && val.startsWith('Select model, current: ')) {
-                        let modelName = val.replace('Select model, current: ', '');
-                        modelName = modelName.replace(/\bHigh\b/g, 'Alta').replace(/\bMedium\b/g, 'Média').replace(/\bLow\b/g, 'Baixa');
-                        el.setAttribute('aria-label', 'Selecionar modelo, atual: ' + modelName);
+                    if ((attr === 'aria-label' || attr === 'title') && (val.startsWith('Select model, current: ') || val.startsWith('Selecionar modelo, atual: '))) {
+                        let modelName = val.replace('Select model, current: ', '').replace('Selecionar modelo, atual: ', '');
+                        modelName = modelName
+                            .replace(/\\bHigh\\b/gi, 'Alta')
+                            .replace(/\\bMedium\\b/gi, 'Média')
+                            .replace(/\\bLow\\b/gi, 'Baixa')
+                            .replace(/\\bMinimal\\b/gi, 'Mínima');
+                        el.setAttribute(attr, 'Selecionar modelo, atual: ' + modelName);
                         continue;
                     }
                     const trimmed = val.trim();
@@ -292,6 +324,7 @@ function buildPreloadScript(dictionary) {
                 if (isMutating) return;
                 for (const m of mutations) {
                     if (m.type === 'characterData') {
+                        translatedNodes.delete(m.target);
                         translateTextNode(m.target);
                     } else if (m.type === 'childList') {
                         for (const n of m.addedNodes) {
