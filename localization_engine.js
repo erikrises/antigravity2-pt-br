@@ -148,7 +148,7 @@ function buildPreloadScript(dictionary) {
             lowerMap.set(k.toLowerCase(), v);
         }
 
-        const translatedNodes = new WeakSet();
+        const translatedValues = new WeakMap();
         const EXCLUDED_TAGS = new Set(['SCRIPT', 'STYLE', 'PRE', 'CODE', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'CANVAS', 'SVG']);
         const EXCLUSION_SELECTOR = 'pre, code, textarea, input, select, .monaco-editor, .cm-editor, [contenteditable="true"], [data-lexical-editor], [role="textbox"], .terminal, .xterm, .code-block, .font-mono, [class*="font-mono"], [translate="no"], .notranslate';
 
@@ -166,10 +166,10 @@ function buildPreloadScript(dictionary) {
 
         function translateTextNode(node) {
             if (!node || node.nodeType !== Node.TEXT_NODE) return;
-            if (translatedNodes.has(node)) return;
+            const text = node.nodeValue;
+            if (translatedValues.get(node) === text) return;
             if (isExcluded(node)) return;
 
-            const text = node.nodeValue;
             if (!text || text.length < 2 || !/[a-zA-Z]/.test(text)) return;
             const trimmed = text.trim();
             if (!trimmed) return;
@@ -225,10 +225,11 @@ function buildPreloadScript(dictionary) {
             }
 
             if (replacement && replacement !== trimmed) {
-                translatedNodes.add(node);
+                const newText = text.replace(trimmed, replacement);
+                translatedValues.set(node, newText);
                 isMutating = true;
                 try {
-                    node.nodeValue = text.replace(trimmed, replacement);
+                    node.nodeValue = newText;
                 } finally {
                     isMutating = false;
                 }
@@ -241,14 +242,22 @@ function buildPreloadScript(dictionary) {
             for (const attr of ['placeholder', 'title', 'aria-label']) {
                 const val = el.getAttribute(attr);
                 if (val && /[a-zA-Z]/.test(val)) {
-                    if ((attr === 'aria-label' || attr === 'title') && (val.startsWith('Select model, current: ') || val.startsWith('Selecionar modelo, atual: '))) {
-                        let modelName = val.replace('Select model, current: ', '').replace('Selecionar modelo, atual: ', '');
+                    if (attr === 'aria-label' && val.startsWith('Select model, current: ')) {
+                        let modelName = val.replace('Select model, current: ', '');
                         modelName = modelName
                             .replace(/\\bHigh\\b/gi, 'Alta')
                             .replace(/\\bMedium\\b/gi, 'Média')
                             .replace(/\\bLow\\b/gi, 'Baixa')
                             .replace(/\\bMinimal\\b/gi, 'Mínima');
-                        el.setAttribute(attr, 'Selecionar modelo, atual: ' + modelName);
+                        const newVal = 'Selecionar modelo, atual: ' + modelName;
+                        if (newVal !== val) {
+                            isMutating = true;
+                            try {
+                                el.setAttribute(attr, newVal);
+                            } finally {
+                                isMutating = false;
+                            }
+                        }
                         continue;
                     }
                     const trimmed = val.trim();
@@ -258,7 +267,15 @@ function buildPreloadScript(dictionary) {
                         replacement = map.get(norm) || lowerMap.get(norm.toLowerCase());
                     }
                     if (replacement && replacement !== trimmed) {
-                        el.setAttribute(attr, val.replace(trimmed, replacement));
+                        const newVal = val.replace(trimmed, replacement);
+                        if (newVal !== val) {
+                            isMutating = true;
+                            try {
+                                el.setAttribute(attr, newVal);
+                            } finally {
+                                isMutating = false;
+                            }
+                        }
                     }
                 }
             }
@@ -324,7 +341,6 @@ function buildPreloadScript(dictionary) {
                 if (isMutating) return;
                 for (const m of mutations) {
                     if (m.type === 'characterData') {
-                        translatedNodes.delete(m.target);
                         translateTextNode(m.target);
                     } else if (m.type === 'childList') {
                         for (const n of m.addedNodes) {
