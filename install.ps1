@@ -4,6 +4,7 @@
 
 .DESCRIPTION
     Aplica a tradução pt-BR injetando o motor de localização no arquivo app.asar do Antigravity.
+    Suporta execução local ou remota (one-liner via irm | iex).
     Cria automaticamente um backup (app.asar.bak) na primeira execução.
 
 .PARAMETER Restore
@@ -22,6 +23,7 @@
     .\install.ps1
     .\install.ps1 -Kill
     .\install.ps1 -Restore
+    irm https://raw.githubusercontent.com/erikrises/antigravity2-pt-br/main/install.ps1 | iex
 #>
 
 [CmdletBinding()]
@@ -74,15 +76,36 @@ if ($antigravityProcesses) {
     }
 }
 
-# 4. Montar argumentos para o motor
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$engineScript = Join-Path $scriptDir "localization_engine.js"
+# 4. Determinar se execução é local ou remota (one-liner via irm | iex)
+$cleanup = $false
+$tempExtract = $null
+$scriptDir = ""
 
+if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "localization_engine.js"))) {
+    $scriptDir = $PSScriptRoot
+} elseif ($MyInvocation.MyCommand.Path -and (Test-Path (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "localization_engine.js"))) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+} else {
+    Write-Host "[INFO] Baixando a versão mais recente da tradução..." -ForegroundColor Cyan
+    $tempZip = Join-Path $env:TEMP "antigravity-ptbr.zip"
+    $tempExtract = Join-Path $env:TEMP "antigravity-ptbr-temp"
+    if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue }
+
+    Invoke-WebRequest -Uri "https://github.com/erikrises/antigravity2-pt-br/archive/refs/heads/main.zip" -OutFile $tempZip -UseBasicParsing
+    Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
+    Remove-Item -Force $tempZip
+
+    $scriptDir = Join-Path $tempExtract "antigravity2-pt-br-main"
+    $cleanup = $true
+}
+
+$engineScript = Join-Path $scriptDir "localization_engine.js"
 if (-not (Test-Path $engineScript)) {
     Write-Host "[ERRO] Não foi possível localizar localization_engine.js em $scriptDir" -ForegroundColor Red
     Exit 1
 }
 
+# 5. Montar argumentos para o motor
 $nodeArgs = @()
 if ($Restore -or $Uninstall) {
     $nodeArgs += "--restore"
@@ -95,7 +118,7 @@ if ($InstallDir -ne "") {
     $nodeArgs += $InstallDir
 }
 
-# 5. Executar o motor de localização
+# 6. Executar o motor de localização
 Write-Host "[INFO] Executando motor de localização..." -ForegroundColor Cyan
 Push-Location $scriptDir
 try {
@@ -114,4 +137,7 @@ try {
     }
 } finally {
     Pop-Location
+    if ($cleanup -and $tempExtract -and (Test-Path $tempExtract)) {
+        Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue
+    }
 }

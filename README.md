@@ -23,25 +23,43 @@ Tradução moderna, completa e segura da interface desktop do **Google Antigravi
 
 ---
 
-## 🚀 Instalação Rápida
+## 🚀 Instalação Rápida (Comando Único)
 
-### 🐧 Linux
+### 🐧 Linux & 🍎 macOS
 
 Abra o terminal e execute:
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/erikrises/antigravity2-pt-br/main/install.sh | bash
+```
+
+*(No macOS, o script detecta `/Applications/Antigravity.app`, aplica a tradução e renova automaticamente a assinatura ad-hoc necessária para o Gatekeeper).*
+
+---
+
+### 🪟 Windows
+
+Abra o **PowerShell** como **Administrador** e execute:
+
+```powershell
+irm https://raw.githubusercontent.com/erikrises/antigravity2-pt-br/main/install.ps1 | iex
+```
+
+*(Dica: certifique-se de que o Antigravity esteja fechado antes de rodar, ou passe `-Kill` caso utilize o modo manual).*
+
+---
+
+<details>
+<summary><b>📦 Método Alternativo: Instalação via Git Clone</b></summary>
+
+#### Linux / macOS:
 ```bash
 git clone https://github.com/erikrises/antigravity2-pt-br.git
 cd antigravity2-pt-br
 sudo ./install.sh
 ```
 
----
-
-### 🪟 Windows
-
-1. Abra o **PowerShell** como **Administrador**.
-2. Navegue até a pasta onde deseja salvar o projeto e execute:
-
+#### Windows (PowerShell):
 ```powershell
 git clone https://github.com/erikrises/antigravity2-pt-br.git
 cd antigravity2-pt-br
@@ -49,24 +67,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\install.ps1
 ```
 
-> **Dica para Windows:** Se o Antigravity já estiver aberto, use o parâmetro `-Kill` para fechá-lo automaticamente antes de aplicar o patch:
-> ```powershell
-> .\install.ps1 -Kill
-> ```
-
----
-
-### 🍎 macOS
-
-Abra o Terminal e execute:
-
-```bash
-git clone https://github.com/erikrises/antigravity2-pt-br.git
-cd antigravity2-pt-br
-sudo ./install.sh
-```
-
-*(O instalador detecta a instalação em `/Applications/Antigravity.app`, aplica a tradução e renova a assinatura ad-hoc necessária para o Gatekeeper).*
+</details>
 
 ---
 
@@ -121,11 +122,9 @@ Os termos traduzidos ficam organizados em arquivos modulares em `dicts/`:
 
 ---
 
-## 🛠️ Ferramentas para Desenvolvedores e Colaboradores
+## 🛠️ Ferramentas para Desenvolvedores e Mantenedores
 
-- **`tools/sync_new_strings.py`**: Compara o `app.asar` atual com o backup original e extrai termos novos em inglês não cobertos pelos dicionários atuais.
-- **`tools/auto_translate.js`**: Script auxiliar para tradução em lote de termos extraídos.
-- **`tools/on_startup_check.sh`**: Script para verificação periódica de integridade da tradução.
+- **`tools/sync_new_strings.py`**: Compara o `app.asar` atual com os dicionários e extrai novos termos em inglês introduzidos por atualizações do Google Antigravity para tradução incremental.
 
 Consulte o arquivo [CONTRIBUTING.md](CONTRIBUTING.md) para saber como contribuir com correções de termos ou melhorias.
 
