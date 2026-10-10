@@ -153,6 +153,8 @@ def is_potential_ui_string(s):
         return False
     if 'CmdOrCtrl' in s or re.match(r'^(?:Ctrl|Cmd|Alt|Shift)\+', s):
         return False
+    if re.search(r'[áàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇ]', s):
+        return False
     if not re.search(r'[a-zA-Z]', s):
         return False
     return True
