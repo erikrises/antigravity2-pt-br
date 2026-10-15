@@ -212,7 +212,7 @@ function buildPreloadScript(dictionary) {
                     };
                     if (tierMap[tierClean]) {
                         const isLikelyModel = 
-                            /(\\b(?:Flash|Pro|Sonnet|Opus|Haiku|GPT|Preview|Thinking|Gemini|Claude|DeepSeek|Llama|Qwen|Mistral|Codestral|o1|o3|o4|Model|OSS)\\b)/i.test(prefix) ||
+                            /(\\b(?:Flash|Pro|Sonnet|Opus|Haiku|GPT|Preview|Thinking|Gemini|Claude|DeepSeek|Llama|Qwen|Mistral|Codestral|o1|o3|o4|Model|OSS|Argon)\\b)/i.test(prefix) ||
                             (node.parentElement && node.parentElement.closest && !!node.parentElement.closest('[aria-label*=\"model\" i], [aria-label*=\"modelo\" i], [class*=\"model\" i], [id*=\"model\" i], [data-testid*=\"model\" i], button, [role=\"button\"], [role=\"menuitem\"], [role=\"option\"]'));
 
                         if (isLikelyModel) {
@@ -221,6 +221,29 @@ function buildPreloadScript(dictionary) {
                             replacement = translatedPrefix + space + translatedTier;
                         }
                     }
+                }
+            }
+
+            // Frases dinâmicas de cota / Créditos de IA (Argon)
+            if (!replacement) {
+                const quotaMatch = trimmed.match(/^Your plan's baseline quota will refresh on (.+?)\\.?$/i);
+                if (quotaMatch) {
+                    replacement = 'A cota básica do seu plano será renovada em ' + quotaMatch[1] + '.';
+                }
+            }
+            if (!replacement) {
+                const creditMatch = trimmed.match(/^You need (?:at least (\\d+)|more) AI Credits to send messages\\. To continue using (.+?) now, purchase more AI Credits\\.?$/i);
+                if (creditMatch) {
+                    const amount = creditMatch[1];
+                    const modelName = creditMatch[2];
+                    const qtyStr = amount ? ('pelo menos ' + amount) : 'mais';
+                    replacement = 'Você precisa de ' + qtyStr + ' Créditos de IA para enviar mensagens. Para continuar usando ' + modelName + ' agora, compre mais Créditos de IA.';
+                }
+            }
+            if (!replacement) {
+                const overageMatch = trimmed.match(/^To continue using (.+?) now, enable AI Credit overages\\.?$/i);
+                if (overageMatch) {
+                    replacement = 'Para continuar usando ' + overageMatch[1] + ' agora, ative os excedentes de Crédito de IA.';
                 }
             }
 
