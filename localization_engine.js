@@ -603,14 +603,20 @@ function _translateMenuTree(menuInstance) {
         fs.writeFileSync(menuPath, menuContent, 'utf-8');
     }
 
-    // 6. Injetar tradução da bandeja do sistema (tray) em dist/tray.js
+    // 6. Injetar tradução da bandeja do sistema (tray) e botão de Reiniciar em dist/tray.js
     const trayPath = path.join(tempDir, 'dist', 'tray.js');
     if (fs.existsSync(trayPath)) {
-        log('Injetando tradução na bandeja do sistema (dist/tray.js)...');
+        log('Injetando tradução e botão Reiniciar na bandeja do sistema (dist/tray.js)...');
         let trayContent = fs.readFileSync(trayPath, 'utf-8');
 
-        const oldCreateTraySig = 'contextMenu = electron_1.Menu.buildFromTemplate(actions);';
-        const newCreateTraySig = `
+        // Limpar injeções anteriores se existirem (inclusive repetições de versões antigas)
+        trayContent = trayContent.replace(/\/\* --- ANTIGRAVITY PT-BR TRAY START --- \*\/[\s\S]*?\/\* --- ANTIGRAVITY PT-BR TRAY END --- \*\/\s*/g, '');
+        while (trayContent.includes("act.label === 'No agents running'")) {
+            trayContent = trayContent.replace(/\s*if\s*\(Array\.isArray\(actions\)\)\s*\{[\s\S]*?act\.label\s*===\s*'Reopen Locally'[\s\S]*?\}\s*\}\s*\}/, '');
+        }
+
+        const buildTemplateTarget = 'contextMenu = electron_1.Menu.buildFromTemplate(actions);';
+        const newTrayInjection = `/* --- ANTIGRAVITY PT-BR TRAY START --- */
     if (Array.isArray(actions)) {
         for (const act of actions) {
             if (act.label) {
@@ -621,10 +627,32 @@ function _translateMenuTree(menuInstance) {
                 else if (act.label === 'Reopen Locally') act.label = 'Reabrir Localmente';
             }
         }
+        const hasRestart = actions.some(act => act.id === 'restart-app' || act.label === 'Reiniciar');
+        if (!hasRestart) {
+            const quitIndex = actions.findIndex(act => act.label === 'Sair' || act.label === 'Quit');
+            const restartItem = {
+                id: 'restart-app',
+                label: 'Reiniciar',
+                click: () => {
+                    try {
+                        (0, utils_1.setShowQuitConfirmation)(false);
+                    } catch (_) {}
+                    electron_1.app.relaunch();
+                    electron_1.app.quit();
+                }
+            };
+            if (quitIndex !== -1) {
+                actions.splice(quitIndex, 0, restartItem);
+            } else {
+                actions.push(restartItem);
+            }
+        }
     }
+/* --- ANTIGRAVITY PT-BR TRAY END --- */
     contextMenu = electron_1.Menu.buildFromTemplate(actions);`;
-        if (trayContent.includes(oldCreateTraySig)) {
-            trayContent = trayContent.replace(oldCreateTraySig, newCreateTraySig);
+
+        if (trayContent.includes(buildTemplateTarget)) {
+            trayContent = trayContent.replace(buildTemplateTarget, newTrayInjection);
         }
 
         const trayRegex = /countItem\.label\s*=\s*[\s\S]*?' running';/;
@@ -637,7 +665,7 @@ function _translateMenuTree(menuInstance) {
 
     // 7. Recompactar app.asar
     log('Reempacotando app.asar traduzido...');
-    const packedAsar = path.join(tempDir, 'repacked.asar');
+    const packedAsar = path.join(os.tmpdir(), `antigravity-repacked-${Date.now()}.asar`);
     child_process.execSync(`${asarCmd} pack "${tempDir}" "${packedAsar}" --unpack-dir "**/node_modules/chrome-devtools-mcp/**"`, { stdio: 'pipe' });
 
     if (!fs.existsSync(packedAsar)) {
@@ -655,6 +683,8 @@ function _translateMenuTree(menuInstance) {
             throw new Error(`Permissão negada ao gravar em ${asarPath}. Execute com privilégios de administrador (sudo no Linux/macOS, ou como Administrador no Windows).`);
         }
         throw e;
+    } finally {
+        try { fs.rmSync(packedAsar, { force: true }); } catch (_) {}
     }
 
     if (process.platform !== 'win32') {
