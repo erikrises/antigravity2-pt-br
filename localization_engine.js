@@ -149,16 +149,32 @@ function buildPreloadScript(dictionary) {
         }
 
         const translatedValues = new WeakMap();
+        const exclusionCache = new WeakMap();
         const EXCLUDED_TAGS = new Set(['SCRIPT', 'STYLE', 'PRE', 'CODE', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'CANVAS', 'SVG']);
-        const EXCLUSION_SELECTOR = 'pre, code, textarea, input, select, .monaco-editor, .cm-editor, [contenteditable="true"], [data-lexical-editor], [role="textbox"], .terminal, .xterm, .code-block, .font-mono, [class*="font-mono"], [translate="no"], .notranslate';
+        const LOCAL_EXCLUSION_SELECTOR = 'pre, code, textarea, input, select, .monaco-editor, .cm-editor, [contenteditable="true"], [data-lexical-editor], [role="textbox"], .terminal, .xterm, .code-block, .font-mono, [class*="font-mono"], [translate="no"], .notranslate';
 
-        function isExcluded(node) {
-            if (!node) return true;
-            const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-            if (!el) return true;
-            if (EXCLUDED_TAGS.has(el.tagName)) return true;
-            if (el.isContentEditable) return true;
-            if (typeof el.closest === 'function' && el.closest(EXCLUSION_SELECTOR)) return true;
+        function isElementExcluded(el) {
+            if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
+            const cached = exclusionCache.get(el);
+            if (cached !== undefined) return cached;
+
+            if (EXCLUDED_TAGS.has(el.tagName) || el.isContentEditable) {
+                exclusionCache.set(el, true);
+                return true;
+            }
+
+            if (typeof el.matches === 'function' && el.matches(LOCAL_EXCLUSION_SELECTOR)) {
+                exclusionCache.set(el, true);
+                return true;
+            }
+
+            if (el.parentElement) {
+                const parentExcluded = isElementExcluded(el.parentElement);
+                exclusionCache.set(el, parentExcluded);
+                return parentExcluded;
+            }
+
+            exclusionCache.set(el, false);
             return false;
         }
 
@@ -167,10 +183,10 @@ function buildPreloadScript(dictionary) {
         function translateTextNode(node) {
             if (!node || node.nodeType !== Node.TEXT_NODE) return;
             const text = node.nodeValue;
-            if (translatedValues.get(node) === text) return;
-            if (isExcluded(node)) return;
-
             if (!text || text.length < 2 || !/[a-zA-Z]/.test(text)) return;
+            if (translatedValues.get(node) === text) return;
+            if (isElementExcluded(node.parentElement)) return;
+
             const trimmed = text.trim();
             if (!trimmed) return;
 
@@ -260,44 +276,49 @@ function buildPreloadScript(dictionary) {
         }
 
         function translateAttributes(el) {
-            if (!el || el.nodeType !== Node.ELEMENT_NODE) return;
-            if (isExcluded(el)) return;
-            for (const attr of ['placeholder', 'title', 'aria-label']) {
+            if (!el || el.nodeType !== Node.ELEMENT_NODE || !el.hasAttributes || !el.hasAttributes()) return;
+            if (isElementExcluded(el)) return;
+
+            const attrs = ['aria-label', 'placeholder', 'title'];
+            for (let i = 0; i < attrs.length; i++) {
+                const attr = attrs[i];
+                if (!el.hasAttribute(attr)) continue;
                 const val = el.getAttribute(attr);
-                if (val && /[a-zA-Z]/.test(val)) {
-                    if (attr === 'aria-label' && val.startsWith('Select model, current: ')) {
-                        let modelName = val.replace('Select model, current: ', '');
-                        modelName = modelName
-                            .replace(/\\bHigh\\b/gi, 'Alta')
-                            .replace(/\\bMedium\\b/gi, 'Média')
-                            .replace(/\\bLow\\b/gi, 'Baixa')
-                            .replace(/\\bMinimal\\b/gi, 'Mínima');
-                        const newVal = 'Selecionar modelo, atual: ' + modelName;
-                        if (newVal !== val) {
-                            isMutating = true;
-                            try {
-                                el.setAttribute(attr, newVal);
-                            } finally {
-                                isMutating = false;
-                            }
+                if (!val || val.length < 2 || !/[a-zA-Z]/.test(val)) continue;
+
+                if (attr === 'aria-label' && val.startsWith('Select model, current: ')) {
+                    let modelName = val.replace('Select model, current: ', '');
+                    modelName = modelName
+                        .replace(/\\bHigh\\b/gi, 'Alta')
+                        .replace(/\\bMedium\\b/gi, 'Média')
+                        .replace(/\\bLow\\b/gi, 'Baixa')
+                        .replace(/\\bMinimal\\b/gi, 'Mínima');
+                    const newVal = 'Selecionar modelo, atual: ' + modelName;
+                    if (newVal !== val) {
+                        isMutating = true;
+                        try {
+                            el.setAttribute(attr, newVal);
+                        } finally {
+                            isMutating = false;
                         }
-                        continue;
                     }
-                    const trimmed = val.trim();
-                    let replacement = map.get(trimmed) || lowerMap.get(trimmed.toLowerCase());
-                    if (!replacement) {
-                        const norm = trimmed.replace(/\\s+/g, ' ');
-                        replacement = map.get(norm) || lowerMap.get(norm.toLowerCase());
-                    }
-                    if (replacement && replacement !== trimmed) {
-                        const newVal = val.replace(trimmed, replacement);
-                        if (newVal !== val) {
-                            isMutating = true;
-                            try {
-                                el.setAttribute(attr, newVal);
-                            } finally {
-                                isMutating = false;
-                            }
+                    continue;
+                }
+
+                const trimmed = val.trim();
+                let replacement = map.get(trimmed) || lowerMap.get(trimmed.toLowerCase());
+                if (!replacement) {
+                    const norm = trimmed.replace(/\\s+/g, ' ');
+                    replacement = map.get(norm) || lowerMap.get(norm.toLowerCase());
+                }
+                if (replacement && replacement !== trimmed) {
+                    const newVal = val.replace(trimmed, replacement);
+                    if (newVal !== val) {
+                        isMutating = true;
+                        try {
+                            el.setAttribute(attr, newVal);
+                        } finally {
+                            isMutating = false;
                         }
                     }
                 }
@@ -305,13 +326,16 @@ function buildPreloadScript(dictionary) {
         }
 
         function walk(root) {
-            if (!root || isExcluded(root)) return;
+            if (!root) return;
             if (root.nodeType === Node.TEXT_NODE) {
                 translateTextNode(root);
                 return;
             }
             if (root.nodeType === Node.ELEMENT_NODE) {
-                translateAttributes(root);
+                if (isElementExcluded(root)) return;
+                if (root.hasAttributes && root.hasAttributes()) {
+                    translateAttributes(root);
+                }
                 let child = root.firstChild;
                 while (child) {
                     walk(child);
@@ -342,38 +366,27 @@ function buildPreloadScript(dictionary) {
                 setTimeout(init, 50);
                 return;
             }
+
             walk(document.body);
             translateTitle();
-            setTimeout(() => { if (document.body) { walk(document.body); translateTitle(); } }, 300);
-            setTimeout(() => { if (document.body) { walk(document.body); translateTitle(); } }, 1000);
-            setTimeout(() => { if (document.body) { walk(document.body); translateTitle(); } }, 2500);
-
-            let sweepTimer = null;
-            function scheduleSweep(delay = 80) {
-                if (sweepTimer) clearTimeout(sweepTimer);
-                sweepTimer = setTimeout(() => {
-                    sweepTimer = null;
-                    if (document.body) {
-                        walk(document.body);
-                        translateTitle();
-                    }
-                }, delay);
-            }
+            setTimeout(() => { if (document.body) { walk(document.body); translateTitle(); } }, 400);
+            setTimeout(() => { if (document.body) { walk(document.body); translateTitle(); } }, 1500);
 
             const observer = new MutationObserver((mutations) => {
                 if (isMutating) return;
-                for (const m of mutations) {
+                for (let i = 0; i < mutations.length; i++) {
+                    const m = mutations[i];
                     if (m.type === 'characterData') {
                         translateTextNode(m.target);
                     } else if (m.type === 'childList') {
-                        for (const n of m.addedNodes) {
-                            walk(n);
+                        const added = m.addedNodes;
+                        for (let j = 0; j < added.length; j++) {
+                            walk(added[j]);
                         }
                     } else if (m.type === 'attributes') {
                         translateAttributes(m.target);
                     }
                 }
-                scheduleSweep(120);
             });
 
             observer.observe(document.body, {
@@ -384,27 +397,23 @@ function buildPreloadScript(dictionary) {
                 attributeFilter: ['title', 'placeholder', 'aria-label']
             });
 
+            // Otimização de eventos: tradução cirúrgica de menus e tooltips sem varrer todo o document.body
             window.addEventListener('click', () => {
-                scheduleSweep(30);
-                setTimeout(() => { if (document.body) walk(document.body); }, 180);
-                setTimeout(() => { if (document.body) walk(document.body); }, 450);
+                setTimeout(() => {
+                    const popovers = document.querySelectorAll('[role="menu"], [role="listbox"], [role="dialog"], [data-radix-popper-content-wrapper]');
+                    for (let i = 0; i < popovers.length; i++) {
+                        walk(popovers[i]);
+                    }
+                }, 80);
             }, true);
 
             window.addEventListener('mouseover', (e) => {
-                if (e.target && e.target.closest && (
-                    e.target.closest('[data-tooltip-id]') ||
-                    e.target.closest('[role="tooltip"]') ||
-                    e.target.closest('.react-tooltip') ||
-                    e.target.closest('.compact-tooltip') ||
-                    e.target.closest('button')
-                )) {
-                    scheduleSweep(25);
-                    setTimeout(() => { if (document.body) walk(document.body); }, 120);
+                const target = e.target;
+                if (!target || typeof target.closest !== 'function') return;
+                const tooltip = target.closest('[role="tooltip"], .react-tooltip, .compact-tooltip');
+                if (tooltip) {
+                    walk(tooltip);
                 }
-            }, true);
-
-            window.addEventListener('focusin', () => {
-                scheduleSweep(50);
             }, true);
 
             window.__antigravity_ptbr_walk = () => {
