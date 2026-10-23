@@ -36,10 +36,8 @@ Se você ainda não possui o **Google Antigravity** instalado em sua máquina, f
 | **🍎 macOS (Apple Silicon / Intel)** | Baixe a imagem `.dmg` oficial e arraste o `Antigravity.app` para a sua pasta `/Applications`. |
 | **🐧 Linux (Debian, Ubuntu, Fedora, Arch, etc.)** | Baixe o pacote oficial `Antigravity.tar.gz` e extraia em `/opt/antigravity` (ou instale o pacote correspondente à sua distro). |
 
-> [!TIP]
-> **Interface de Linha de Comando (CLI `agy`):** Caso também queira utilizar a CLI oficial do Antigravity no terminal:
-> - **Linux / macOS:** `curl -fsSL https://antigravity.google/cli/install.sh | bash`
-> - **Windows (PowerShell):** `irm https://antigravity.google/cli/install.ps1 | iex`
+> [!IMPORTANT]
+> **Foco Exclusivo no Desktop:** Este pacote de tradução é desenvolvido **exclusivamente para a interface do aplicativo Desktop (IDE)** do Google Antigravity. Ele não cobre nem modifica a ferramenta de linha de comando (`agy`).
 
 ---
 
