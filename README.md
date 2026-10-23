@@ -24,7 +24,28 @@ Tradução moderna, completa e segura da interface desktop do **Google Antigravi
 
 ---
 
-## 🚀 Instalação Rápida (Comando Único)
+## 📥 1. Como Baixar e Instalar o Google Antigravity
+
+Se você ainda não possui o **Google Antigravity** instalado em sua máquina, faça o download oficial diretamente no portal da Google:
+
+🔗 **Site Oficial de Download:** **[antigravity.google/download](https://antigravity.google/download)**
+
+| Sistema Operacional | Método de Instalação Oficial |
+|---|---|
+| **🪟 Windows (10 / 11)** | Baixe o instalador `.exe` oficial (x64 ou ARM64) e execute o assistente de instalação padrão. |
+| **🍎 macOS (Apple Silicon / Intel)** | Baixe a imagem `.dmg` oficial e arraste o `Antigravity.app` para a sua pasta `/Applications`. |
+| **🐧 Linux (Debian, Ubuntu, Fedora, Arch, etc.)** | Baixe o pacote oficial `Antigravity.tar.gz` e extraia em `/opt/antigravity` (ou instale o pacote correspondente à sua distro). |
+
+> [!TIP]
+> **Interface de Linha de Comando (CLI `agy`):** Caso também queira utilizar a CLI oficial do Antigravity no terminal:
+> - **Linux / macOS:** `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+> - **Windows (PowerShell):** `irm https://antigravity.google/cli/install.ps1 | iex`
+
+---
+
+## 🚀 2. Instalação da Tradução pt-BR (Comando Único)
+
+Após instalar o Antigravity, aplique a tradução completa em Português com um único comando:
 
 ### 🐧 Linux & 🍎 macOS
 
