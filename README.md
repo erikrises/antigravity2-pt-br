@@ -1,23 +1,24 @@
 # Antigravity 2.0 - Pacote de Tradução em Português do Brasil (pt-BR) 🇧🇷
 
-Tradução moderna, completa e segura da interface desktop do **Google Antigravity 2.0** para Português do Brasil (pt-BR), com suporte multiplataforma (**Linux**, **Windows** e **macOS**), persistência pós-atualização e detecção inteligente de novidades.
+Tradução moderna, completa e segura da interface desktop do **Google Antigravity 2.0** para Português do Brasil (pt-BR), com suporte multiplataforma (**Linux**, **Windows** e **macOS**), persistência automática pós-atualização e detecção inteligente de novidades.
 
 ---
 
 > [!NOTE]
 > **Aviso Legal / Trademark Disclaimer:**  
 > **Antigravity** é uma marca registrada da **Google LLC**.  
-> Este é um projeto independente de código aberto. Este projeto **NÃO** possui qualquer vínculo, afiliação, endosso ou patrocínio por parte da Google LLC.  
+> Este é um projeto independente de código aberto desenvolvido para fins de acessibilidade linguística e tradução local. Este projeto **NÃO** possui qualquer vínculo, afiliação, endosso ou patrocínio por parte da Google LLC ou da equipe do Google Antigravity.  
 > O repositório distribui exclusivamente dicionários de tradução e scripts de modificação local (mod), não contendo nem redistribuindo quaisquer binários ou arquivos proprietários da Google.
 
 ---
 
 ## ✨ Características
 
-- 🌐 **Interface 100% em Português:** Menus da barra de títulos, barra de status (tray), painel lateral, gerenciador de subagentes, permissões, workspaces, servidores MCP, paleta de comandos e configurações de modelos.
+- 🌐 **Interface 100% em Português:** Menus da barra de títulos, barra de status (tray), painel lateral, assistente de instalação/onboarding, gerenciador de subagentes, permissões, workspaces, servidores MCP, paleta de comandos e configurações de modelos.
+- ⚡ **Sem Dependência de Node.js Externo:** O motor detecta automaticamente e utiliza o Node.js v24 embutido no próprio binário do Antigravity (`ELECTRON_RUN_AS_NODE=1`), funcionando mesmo se você não tiver Node.js instalado na máquina.
 - 🛡️ **Isolamento Rígido de Código:** Jamais altera blocos de código (`pre`, `code`), terminais embutidos (`xterm`), editores (`Monaco`/`Lexical`), logs técnicos ou o conteúdo gerado pela IA no chat.
-- 💻 **Multiplataforma:** Compatível com **Linux** (Debian, Ubuntu, Fedora, Arch, etc.), **Windows** (10/11) e **macOS** (Apple Silicon / Intel).
-- 🔄 **100% Reversível com Backup Automático:** Cria backup oficial (`app.asar.bak`) na primeira execução, permitindo restaurar a versão oficial em inglês a qualquer momento com um único comando.
+- 💻 **Universal e Multiplataforma:** Compatível com **Linux** (qualquer ambiente: KDE Plasma, GNOME, XFCE, Cinnamon, i3/Sway), **Windows** (10/11) e **macOS** (Apple Silicon / Intel).
+- 🔄 **100% Reversível com Backup Sincronizado:** Mantém backup oficial (`app.asar.bak`) sincronizado com a versão exata do app, permitindo restaurar a versão oficial em inglês a qualquer momento com um único comando sem risco de downgrade.
 - 🍎 **Segurança no macOS (Gatekeeper Ready):** Aplica automaticamente assinatura ad-hoc (`codesign`) e remove atributos de quarentena (`xattr`), prevenindo erros de integridade do macOS.
 - 🔍 **Detector de Novidades (`tools/sync_new_strings.py`):** Identifica e extrai novas strings adicionadas pelo Google a cada atualização do aplicativo.
 
@@ -33,7 +34,8 @@ Abra o terminal e execute:
 curl -fsSL https://raw.githubusercontent.com/erikrises/antigravity2-pt-br/main/install.sh | bash
 ```
 
-*(No macOS, o script detecta `/Applications/Antigravity.app`, aplica a tradução e renova automaticamente a assinatura ad-hoc necessária para o Gatekeeper).*
+*(No Linux, o instalador configura automaticamente a persistência protegida no gerenciador de pacotes do seu sistema: APT, DNF ou Pacman).*  
+*(No macOS, o script detecta `/Applications/Antigravity.app`, aplica a tradução e renova a assinatura ad-hoc necessária para o Gatekeeper).*
 
 ---
 
@@ -71,24 +73,22 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ---
 
-## 🔄 Persistência em Atualizações do Sistema (Linux APT)
+## 🔄 Persistência em Atualizações do Sistema (Linux Universal)
 
-No Linux, para que o APT e a GNOME Software reapliquem a tradução automaticamente sempre que o Google Antigravity for atualizado:
+O `install.sh` configura automaticamente a persistência protegida em `/usr/local/share/antigravity-ptbr/` (propriedade de `root:root`, modo 0755), prevenindo qualquer risco de segurança:
 
-```bash
-REPO_DIR=$(pwd)
-sudo bash -c "cat << EOF > /etc/apt/apt.conf.d/99antigravity-ptbr
-DPkg::Post-Invoke {
-    \"if [ -f $REPO_DIR/localization_engine.js ] && dpkg -s antigravity 2>/dev/null | grep -q 'Status: install ok installed'; then /usr/bin/node $REPO_DIR/localization_engine.js --no-kill >/dev/null 2>&1 || true; fi\";
-};
-EOF"
-```
+* **Debian, Ubuntu, Linux Mint, Pop!_OS, Zorin OS (APT / dpkg / KDE Discover / GNOME Software):**  
+  Instalado automaticamente em `/etc/apt/apt.conf.d/99antigravity-ptbr`. Dispara tanto por linha de comando (`apt`, `nala`) quanto por lojas gráficas baseadas em PackageKit.
+* **Fedora, RHEL, CentOS (DNF):**  
+  Ação registrada em `/etc/dnf/plugins/post-transaction-actions.d/antigravity-ptbr.action`.
+* **Arch Linux, Manjaro, EndeavourOS (Pacman):**  
+  Hook registrado em `/etc/pacman.d/hooks/antigravity-ptbr.hook`.
 
 ---
 
 ## ↩️ Desinstalação (Restaurar Inglês Original)
 
-Para retornar ao padrão original oficial da Google a qualquer momento:
+Para retornar ao padrão original oficial da Google a qualquer momento e remover os hooks do sistema:
 
 ### Linux / macOS:
 ```bash
@@ -118,12 +118,15 @@ Os termos traduzidos ficam organizados em arquivos modulares em `dicts/`:
 | `dicts/page_settings.json` | Configurações, seleção e potência de modelos, atalhos e sandbox |
 | `dicts/page_v218_extra.json` | Diagnósticos, Git, telemetria e novos módulos |
 | `dicts/web_ui.json` | Interface principal completa da aplicação web/desktop |
+| `dicts/v225_novidades.json` | Novas strings adicionadas na v2.25 (cotas Argon, tempo restante, etc.) |
 | `dicts/novidades.json` | Novas strings adicionadas incrementalmente |
 
 ---
 
 ## 🛠️ Ferramentas para Desenvolvedores e Mantenedores
 
+- **`npm test`**: Valida a sintaxe de todos os arquivos JSON, verifica ausência de conflitos de tradução e testa a sintaxe do motor de localização.
+- **`tools/check_conflicts.js`**: Detecta chaves duplicadas ou conflitantes entre os dicionários.
 - **`tools/sync_new_strings.py`**: Compara o `app.asar` atual com os dicionários e extrai novos termos em inglês introduzidos por atualizações do Google Antigravity para tradução incremental.
 
 Consulte o arquivo [CONTRIBUTING.md](CONTRIBUTING.md) para saber como contribuir com correções de termos ou melhorias.

@@ -256,5 +256,9 @@
     "official documentation": "documentação oficial",
     "migrated in settings": "migrado nas configurações",
     "line bounding box": "caixa delimitadora da linha",
-    "square bounding box": "caixa delimitadora quadrada"
+    "square bounding box": "caixa delimitadora quadrada",
+    "Gemini 4 Argon Weekly Limit": "Limite Semanal do Gemini 4 Argon",
+    "Gemini 4 Argon 5-Hour Limit": "Limite de 5 Horas do Gemini 4 Argon",
+    "Resets in <1m": "Renova em <1m",
+    "to back up your data and run the migration.": "para fazer backup de seus dados e executar a migração."
 }

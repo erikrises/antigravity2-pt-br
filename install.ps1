@@ -5,7 +5,7 @@
 .DESCRIPTION
     Aplica a tradução pt-BR injetando o motor de localização no arquivo app.asar do Antigravity.
     Suporta execução local ou remota (one-liner via irm | iex).
-    Cria automaticamente um backup (app.asar.bak) na primeira execução.
+    Cria automaticamente um backup oficial (app.asar.bak) na primeira execução.
 
 .PARAMETER Restore
     Restaura o backup original oficial do Antigravity.
@@ -49,15 +49,35 @@ if (-not $isAdmin) {
     Write-Host ""
 }
 
-# 2. Verificar instalação do Node.js
+# 2. Localizar runtime Node.js (sistema ou embutido no próprio Antigravity)
+$nodeExec = "node"
+$hasNode = $false
+
 try {
     $nodeVersion = node -v
+    $hasNode = $true
     Write-Host "[OK] Node.js detectado: $nodeVersion" -ForegroundColor Green
 } catch {
-    Write-Host "[ERRO] Node.js não foi encontrado no PATH do sistema!" -ForegroundColor Red
-    Write-Host "Por favor, instale o Node.js v18 ou superior antes de prosseguir:" -ForegroundColor Yellow
+    $candidates = @(
+        "$env:LOCALAPPDATA\Programs\Antigravity\Antigravity.exe",
+        "$env:ProgramFiles\Antigravity\Antigravity.exe",
+        "${env:ProgramFiles(x86)}\Antigravity\Antigravity.exe"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) {
+            $nodeExec = $c
+            $env:ELECTRON_RUN_AS_NODE = "1"
+            $hasNode = $true
+            Write-Host "[OK] Usando Node.js v24 embutido no próprio Antigravity ($c)" -ForegroundColor Green
+            break
+        }
+    }
+}
+
+if (-not $hasNode) {
+    Write-Host "[ERRO] Não foi encontrado nem o Node.js nem o executável do Antigravity!" -ForegroundColor Red
+    Write-Host "Por favor, instale o Antigravity ou o Node.js v18+:" -ForegroundColor Yellow
     Write-Host "  - Via winget: winget install OpenJS.NodeJS.LTS" -ForegroundColor White
-    Write-Host "  - Ou baixe em: https://nodejs.org/" -ForegroundColor White
     Exit 1
 }
 
@@ -87,15 +107,17 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot "localization_engine.
     $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 } else {
     Write-Host "[INFO] Baixando a versão mais recente da tradução..." -ForegroundColor Cyan
-    $tempZip = Join-Path $env:TEMP "antigravity-ptbr.zip"
-    $tempExtract = Join-Path $env:TEMP "antigravity-ptbr-temp"
+    $guid = [System.Guid]::NewGuid().ToString()
+    $tempZip = Join-Path $env:TEMP "antigravity-ptbr-$guid.zip"
+    $tempExtract = Join-Path $env:TEMP "antigravity-ptbr-$guid"
     if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue }
 
     Invoke-WebRequest -Uri "https://github.com/erikrises/antigravity2-pt-br/archive/refs/heads/main.zip" -OutFile $tempZip -UseBasicParsing
     Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
     Remove-Item -Force $tempZip
 
-    $scriptDir = Join-Path $tempExtract "antigravity2-pt-br-main"
+    $firstDir = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
+    $scriptDir = if ($firstDir) { $firstDir.FullName } else { $tempExtract }
     $cleanup = $true
 }
 
@@ -122,7 +144,7 @@ if ($InstallDir -ne "") {
 Write-Host "[INFO] Executando motor de localização..." -ForegroundColor Cyan
 Push-Location $scriptDir
 try {
-    node localization_engine.js @nodeArgs
+    & $nodeExec "localization_engine.js" @nodeArgs
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
         if ($Restore -or $Uninstall) {

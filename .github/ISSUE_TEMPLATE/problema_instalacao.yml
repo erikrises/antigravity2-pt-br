@@ -1,0 +1,46 @@
+name: "Problema na instalação ou restauração"
+description: "Relate um erro ao executar os scripts de instalação ou desinstalação."
+title: "[bug]: "
+labels: ["instalador", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Descreva o problema encontrado ao instalar ou restaurar a tradução.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema Operacional
+      options:
+        - "Linux (Debian / Ubuntu / Mint / Pop!_OS)"
+        - "Linux (Fedora / RHEL / CentOS)"
+        - "Linux (Arch / Manjaro / EndeavourOS)"
+        - "Linux (openSUSE)"
+        - "Linux (Outro)"
+        - "Windows 11 / 10"
+        - "macOS (Apple Silicon)"
+        - "macOS (Intel)"
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: Versão do Antigravity
+      placeholder: "Ex: 2.25.0"
+    validations:
+      required: true
+  - type: textarea
+    id: error_log
+    attributes:
+      label: Mensagem ou log de erro
+      description: Copie e cole a saída completa do terminal.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      placeholder: "1. Executei curl ... | bash\n2. Ocorreu o erro ..."
+    validations:
+      required: true

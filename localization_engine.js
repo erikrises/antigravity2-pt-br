@@ -86,12 +86,35 @@ function checkRunningProcesses() {
     }
 }
 
+function getAsarModule() {
+    try {
+        const localModule = path.join(__dirname, 'node_modules', '@electron', 'asar');
+        if (fs.existsSync(localModule)) {
+            return require(localModule);
+        }
+        return require('@electron/asar');
+    } catch (_) {
+        return null;
+    }
+}
+
 function getAsarCmd() {
     const isWin = process.platform === 'win32';
     const localBin = path.join(__dirname, 'node_modules', '.bin', isWin ? 'asar.cmd' : 'asar');
     if (fs.existsSync(localBin)) {
         return isWin ? `"${localBin}"` : `"${process.execPath}" "${localBin}"`;
     }
+    const asarJs = path.join(__dirname, 'node_modules', '@electron', 'asar', 'bin', 'asar.js');
+    if (fs.existsSync(asarJs)) {
+        return `"${process.execPath}" "${asarJs}"`;
+    }
+    try {
+        const whichCmd = isWin ? 'where asar' : 'which asar';
+        const globalAsar = child_process.execSync(whichCmd, { stdio: 'pipe' }).toString().trim().split(/\r?\n/)[0];
+        if (globalAsar && fs.existsSync(globalAsar)) {
+            return `"${globalAsar}"`;
+        }
+    } catch (_) {}
     const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
     return nodeMajor >= 22 ? 'npx --yes @electron/asar' : 'npx --yes @electron/asar@3';
 }
@@ -180,6 +203,23 @@ function buildPreloadScript(dictionary) {
 
         let isMutating = false;
 
+        function translateDuration(str) {
+            if (!str) return str;
+            return str
+                .replace(/\\babout\\b/gi, 'cerca de')
+                .replace(/\\bless than\\b/gi, 'menos de')
+                .replace(/\\bmore than\\b/gi, 'mais de')
+                .replace(/\\ba few seconds\\b/gi, 'poucos segundos')
+                .replace(/\\ba minute\\b/gi, 'um minuto')
+                .replace(/\\ban hour\\b/gi, 'uma hora')
+                .replace(/\\ba day\\b/gi, 'um dia')
+                .replace(/\\band\\b/gi, 'e')
+                .replace(/\\b(\\d+)\\s+days?\\b/gi, function(m, n) { return n === '1' ? '1 dia' : n + ' dias'; })
+                .replace(/\\b(\\d+)\\s+hours?\\b/gi, function(m, n) { return n === '1' ? '1 hora' : n + ' horas'; })
+                .replace(/\\b(\\d+)\\s+minutes?\\b/gi, function(m, n) { return n === '1' ? '1 minuto' : n + ' minutos'; })
+                .replace(/\\b(\\d+)\\s+seconds?\\b/gi, function(m, n) { return n === '1' ? '1 segundo' : n + ' segundos'; });
+        }
+
         function translateTextNode(node) {
             if (!node || node.nodeType !== Node.TEXT_NODE) return;
             const text = node.nodeValue;
@@ -260,6 +300,75 @@ function buildPreloadScript(dictionary) {
                 const overageMatch = trimmed.match(/^To continue using (.+?) now, enable AI Credit overages\\.?$/i);
                 if (overageMatch) {
                     replacement = 'Para continuar usando ' + overageMatch[1] + ' agora, ative os excedentes de Crédito de IA.';
+                }
+            }
+
+            // Títulos de cota de modelo (ex: "Gemini 4 Argon Weekly Limit" -> "Limite Semanal do Gemini 4 Argon")
+            if (!replacement) {
+                const limitTitleMatch = trimmed.match(/^(.+?)\\s+(Weekly|5-Hour|Five-Hour|Daily|Monthly)\\s+Limit$/i);
+                if (limitTitleMatch) {
+                    const modelName = limitTitleMatch[1];
+                    const period = limitTitleMatch[2].toLowerCase();
+                    const periodMap = {
+                        'weekly': 'Semanal',
+                        '5-hour': 'de 5 Horas',
+                        'five-hour': 'de 5 Horas',
+                        'daily': 'Diário',
+                        'monthly': 'Mensal'
+                    };
+                    const transPeriod = periodMap[period] || period;
+                    const transModel = map.get(modelName) || modelName;
+                    replacement = 'Limite ' + transPeriod + ' do ' + transModel;
+                }
+            }
+
+            // Descrição dinâmica de cota (ex: "You have used some of your weekly limit, it will fully refresh in 1 day, 8 hours.")
+            if (!replacement) {
+                const quotaUsageMatch = trimmed.match(/^You have (?:(used)(?:\\s+(some|all|most))?|(exhausted)|(reached))\\s+(?:of\\s+)?your\\s+([a-zA-Z0-9-]+)\\s+limit,\\s*it\\s+will\\s+fully\\s+refresh\\s+in\\s+(.+?)\\.?$/i);
+                if (quotaUsageMatch) {
+                    const action = (quotaUsageMatch[1] || quotaUsageMatch[3] || quotaUsageMatch[4] || '').toLowerCase();
+                    const quant = (quotaUsageMatch[2] || '').toLowerCase();
+                    const limitType = (quotaUsageMatch[5] || '').toLowerCase();
+                    const duration = translateDuration(quotaUsageMatch[6]);
+
+                    const limitMap = {
+                        'weekly': 'semanal',
+                        '5-hour': 'de 5 horas',
+                        'five-hour': 'de 5 horas',
+                        'daily': 'diário',
+                        'monthly': 'mensal'
+                    };
+                    const transLimit = limitMap[limitType] || ('de ' + limitType);
+
+                    let prefix = 'Você utilizou parte do';
+                    if (action === 'exhausted') {
+                        prefix = 'Você esgotou o';
+                    } else if (action === 'reached') {
+                        prefix = 'Você atingiu o';
+                    } else if (quant === 'all') {
+                        prefix = 'Você utilizou todo o';
+                    } else if (quant === 'most') {
+                        prefix = 'Você utilizou a maior parte do';
+                    } else if (!quant) {
+                        prefix = 'Você utilizou o';
+                    }
+
+                    replacement = prefix + ' seu limite ' + transLimit + ', ele será totalmente renovado em ' + duration + '.';
+                }
+            }
+
+            // Subtexto de renovação de modelo ("Resets in 4h 35m", "Refreshes in <1m")
+            if (!replacement) {
+                const resetsMatch = trimmed.match(/^(?:Resets|Refreshes)\\s+in\\s+(.+)$/i);
+                if (resetsMatch) {
+                    replacement = 'Renova em ' + translateDuration(resetsMatch[1]);
+                }
+            }
+
+            if (!replacement) {
+                const refreshOnlyMatch = trimmed.match(/^(?:It|Your\\s+limit)\\s+will\\s+fully\\s+refresh\\s+in\\s+(.+?)\\.?$/i);
+                if (refreshOnlyMatch) {
+                    replacement = 'Ele será totalmente renovado em ' + translateDuration(refreshOnlyMatch[1]) + '.';
                 }
             }
 
@@ -473,57 +582,125 @@ async function run() {
 
     log('Iniciando aplicação da tradução em Português (pt-BR)...');
 
-    // 1. Criar backup se não existir
-    if (!fs.existsSync(backupPath)) {
-        log(`Criando backup oficial: ${backupPath}`);
-        try {
-            fs.copyFileSync(asarPath, backupPath);
-        } catch (e) {
-            if (e.code === 'EACCES' || e.code === 'EPERM') {
-                throw new Error(`Permissão negada ao criar backup em ${backupPath}. Execute com privilégios de administrador (sudo no Linux/macOS, ou como Administrador no Windows).`);
-            }
-            throw e;
-        }
-    }
-
-    // 2. Descompactar app.asar
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravity-ptbr-'));
-    log(`Extraindo app.asar para ${tempDir}...`);
-    const asarCmd = getAsarCmd();
-    child_process.execSync(`${asarCmd} extract "${asarPath}" "${tempDir}"`, { stdio: 'pipe' });
+    let packedAsar = null;
 
-    // 3. Carregar dicionários
-    log('Carregando dicionários pt-BR...');
-    const dict = loadDictionaries();
-    log(`Total de termos carregados no dicionário: ${Object.keys(dict).length}`);
+    try {
+        log(`Extraindo app.asar para ${tempDir}...`);
+        const asarCmd = getAsarCmd();
+        child_process.execSync(`${asarCmd} extract "${asarPath}" "${tempDir}"`, { stdio: 'pipe' });
 
-    // 4. Injetar no dist/preload.js
-    const preloadPath = path.join(tempDir, 'dist', 'preload.js');
-    if (fs.existsSync(preloadPath)) {
-        log('Injetando motor de tradução no preload.js...');
-        let preloadContent = fs.readFileSync(preloadPath, 'utf-8');
-        // Limpar injeção anterior se houver
-        if (preloadContent.includes(SIGNATURE_START)) {
-            const startIdx = preloadContent.indexOf(SIGNATURE_START);
-            const endIdx = preloadContent.indexOf(SIGNATURE_END) + SIGNATURE_END.length;
-            preloadContent = preloadContent.slice(0, startIdx) + preloadContent.slice(endIdx);
-        }
-        preloadContent += '\n' + buildPreloadScript(dict);
-        fs.writeFileSync(preloadPath, preloadContent, 'utf-8');
-    }
-
-    // 5. Injetar tradução do menu do aplicativo em dist/menu.js
-    const menuPath = path.join(tempDir, 'dist', 'menu.js');
-    if (fs.existsSync(menuPath)) {
-        log('Injetando tradução no menu do aplicativo (dist/menu.js)...');
-        let menuContent = fs.readFileSync(menuPath, 'utf-8');
-        if (menuContent.includes('/* PTBR_MENU_INJECTION */')) {
-            const mStart = menuContent.indexOf('/* PTBR_MENU_INJECTION */');
-            const mEnd = menuContent.indexOf('/* PTBR_MENU_INJECTION_END */') + '/* PTBR_MENU_INJECTION_END */'.length;
-            menuContent = menuContent.slice(0, mStart) + menuContent.slice(mEnd);
+        // Limpeza prévia de injeções anteriores para garantir integridade
+        const preloadPath = path.join(tempDir, 'dist', 'preload.js');
+        if (fs.existsSync(preloadPath)) {
+            let content = fs.readFileSync(preloadPath, 'utf-8');
+            if (content.includes(SIGNATURE_START)) {
+                const sIdx = content.indexOf(SIGNATURE_START);
+                const eIdx = content.indexOf(SIGNATURE_END) + SIGNATURE_END.length;
+                content = content.slice(0, sIdx) + content.slice(eIdx);
+                fs.writeFileSync(preloadPath, content, 'utf-8');
+            }
         }
 
-        const menuInjection = `
+        const wizardPreloadPath = path.join(tempDir, 'dist', 'ideInstall', 'wizardPreload.js');
+        if (fs.existsSync(wizardPreloadPath)) {
+            let content = fs.readFileSync(wizardPreloadPath, 'utf-8');
+            if (content.includes(SIGNATURE_START)) {
+                const sIdx = content.indexOf(SIGNATURE_START);
+                const eIdx = content.indexOf(SIGNATURE_END) + SIGNATURE_END.length;
+                content = content.slice(0, sIdx) + content.slice(eIdx);
+                fs.writeFileSync(wizardPreloadPath, content, 'utf-8');
+            }
+        }
+
+        const menuPath = path.join(tempDir, 'dist', 'menu.js');
+        if (fs.existsSync(menuPath)) {
+            let content = fs.readFileSync(menuPath, 'utf-8');
+            if (content.includes('/* PTBR_MENU_INJECTION */')) {
+                const mStart = content.indexOf('/* PTBR_MENU_INJECTION */');
+                const mEnd = content.indexOf('/* PTBR_MENU_INJECTION_END */') + '/* PTBR_MENU_INJECTION_END */'.length;
+                content = content.slice(0, mStart) + content.slice(mEnd);
+                fs.writeFileSync(menuPath, content, 'utf-8');
+            }
+        }
+
+        const trayPath = path.join(tempDir, 'dist', 'tray.js');
+        if (fs.existsSync(trayPath)) {
+            let content = fs.readFileSync(trayPath, 'utf-8');
+            content = content.replace(/\/\* --- ANTIGRAVITY PT-BR TRAY START --- \*\/[\s\S]*?\/\* --- ANTIGRAVITY PT-BR TRAY END --- \*\/\s*/g, '');
+            while (content.includes("act.label === 'No agents running'")) {
+                content = content.replace(/\s*if\s*\(Array\.isArray\(actions\)\)\s*\{[\s\S]*?act\.label\s*===\s*'Reopen Locally'[\s\S]*?\}\s*\}\s*\}/, '');
+            }
+            fs.writeFileSync(trayPath, content, 'utf-8');
+        }
+
+        // 1. Gerenciamento inteligente e seguro do backup oficial
+        let currentVersion = '2.0.0';
+        try {
+            const pkgJson = JSON.parse(fs.readFileSync(path.join(tempDir, 'package.json'), 'utf-8'));
+            if (pkgJson.version) currentVersion = pkgJson.version;
+        } catch (_) {}
+
+        let shouldCreateBackup = !fs.existsSync(backupPath);
+        if (!shouldCreateBackup) {
+            const asarMod = getAsarModule();
+            if (asarMod) {
+                try {
+                    const bakPkg = JSON.parse(asarMod.extractFile(backupPath, 'package.json').toString('utf-8'));
+                    if (bakPkg.version && bakPkg.version !== currentVersion) {
+                        log(`Backup oficial existente (${bakPkg.version}) difere da versão atual (${currentVersion}). Atualizando backup...`);
+                        shouldCreateBackup = true;
+                    }
+                } catch (_) {
+                    shouldCreateBackup = true;
+                }
+            }
+        }
+
+        if (shouldCreateBackup) {
+            log(`Criando backup oficial limpo (${currentVersion}) em ${backupPath}...`);
+            const bakTemp = path.join(os.tmpdir(), `antigravity-bak-${Date.now()}.asar`);
+            child_process.execSync(`${asarCmd} pack "${tempDir}" "${bakTemp}" --unpack-dir "**/node_modules/chrome-devtools-mcp/**"`, { stdio: 'pipe' });
+            try {
+                fs.copyFileSync(bakTemp, backupPath);
+            } catch (e) {
+                if (e.code === 'EACCES' || e.code === 'EPERM') {
+                    throw new Error(`Permissão negada ao criar backup em ${backupPath}. Execute com privilégios de administrador (sudo no Linux/macOS, ou como Administrador no Windows).`);
+                }
+                throw e;
+            } finally {
+                try { fs.rmSync(bakTemp, { force: true }); } catch (_) {}
+                try { fs.rmSync(`${bakTemp}.unpacked`, { recursive: true, force: true }); } catch (_) {}
+            }
+        }
+
+        // 2. Carregar dicionários
+        log('Carregando dicionários pt-BR...');
+        const dict = loadDictionaries();
+        log(`Total de termos carregados no dicionário: ${Object.keys(dict).length}`);
+        const preloadScript = buildPreloadScript(dict);
+
+        // 3. Injetar no dist/preload.js
+        if (fs.existsSync(preloadPath)) {
+            log('Injetando motor de tradução no preload.js...');
+            let preloadContent = fs.readFileSync(preloadPath, 'utf-8');
+            preloadContent += '\n' + preloadScript;
+            fs.writeFileSync(preloadPath, preloadContent, 'utf-8');
+        }
+
+        // 4. Injetar no dist/ideInstall/wizardPreload.js (Assistente de Instalação/Boas-vindas)
+        if (fs.existsSync(wizardPreloadPath)) {
+            log('Injetando motor de tradução no assistente de instalação (wizardPreload.js)...');
+            let wizardContent = fs.readFileSync(wizardPreloadPath, 'utf-8');
+            wizardContent += '\n' + preloadScript;
+            fs.writeFileSync(wizardPreloadPath, wizardContent, 'utf-8');
+        }
+
+        // 5. Injetar tradução do menu do aplicativo em dist/menu.js
+        if (fs.existsSync(menuPath)) {
+            log('Injetando tradução no menu do aplicativo (dist/menu.js)...');
+            let menuContent = fs.readFileSync(menuPath, 'utf-8');
+            const menuInjection = `
 /* PTBR_MENU_INJECTION */
 const _PTBR_MENU_DICT = {
     "File": "Arquivo",
@@ -620,35 +797,28 @@ function _translateMenuTree(menuInstance) {
 }
 /* PTBR_MENU_INJECTION_END */
 `;
-        menuContent = menuInjection + '\n' + menuContent;
+            menuContent = menuInjection + '\n' + menuContent;
 
-        menuContent = menuContent.replace(
-            `const submenuItem = appMenu.items.find((item) => item.label === submenuLabel);`,
-            `const submenuItem = appMenu.items.find((item) => item.label === submenuLabel || (_PTBR_MENU_DICT[submenuLabel] && item.label === _PTBR_MENU_DICT[submenuLabel]));`
-        );
+            menuContent = menuContent.replace(
+                `const submenuItem = appMenu.items.find((item) => item.label === submenuLabel);`,
+                `const submenuItem = appMenu.items.find((item) => item.label === submenuLabel || (_PTBR_MENU_DICT[submenuLabel] && item.label === _PTBR_MENU_DICT[submenuLabel]));`
+            );
 
-        menuContent = menuContent.replace(
-            /electron_1\.Menu\.setApplicationMenu\(menu\);/g,
-            `_translateMenuTree(menu); electron_1.Menu.setApplicationMenu(menu);`
-        );
+            menuContent = menuContent.replace(
+                /electron_1\.Menu\.setApplicationMenu\(menu\);/g,
+                `_translateMenuTree(menu); electron_1.Menu.setApplicationMenu(menu);`
+            );
 
-        fs.writeFileSync(menuPath, menuContent, 'utf-8');
-    }
-
-    // 6. Injetar tradução da bandeja do sistema (tray) e botão de Reiniciar em dist/tray.js
-    const trayPath = path.join(tempDir, 'dist', 'tray.js');
-    if (fs.existsSync(trayPath)) {
-        log('Injetando tradução e botão Reiniciar na bandeja do sistema (dist/tray.js)...');
-        let trayContent = fs.readFileSync(trayPath, 'utf-8');
-
-        // Limpar injeções anteriores se existirem (inclusive repetições de versões antigas)
-        trayContent = trayContent.replace(/\/\* --- ANTIGRAVITY PT-BR TRAY START --- \*\/[\s\S]*?\/\* --- ANTIGRAVITY PT-BR TRAY END --- \*\/\s*/g, '');
-        while (trayContent.includes("act.label === 'No agents running'")) {
-            trayContent = trayContent.replace(/\s*if\s*\(Array\.isArray\(actions\)\)\s*\{[\s\S]*?act\.label\s*===\s*'Reopen Locally'[\s\S]*?\}\s*\}\s*\}/, '');
+            fs.writeFileSync(menuPath, menuContent, 'utf-8');
         }
 
-        const buildTemplateTarget = 'contextMenu = electron_1.Menu.buildFromTemplate(actions);';
-        const newTrayInjection = `/* --- ANTIGRAVITY PT-BR TRAY START --- */
+        // 6. Injetar tradução da bandeja do sistema (tray) e botão Reiniciar em dist/tray.js
+        if (fs.existsSync(trayPath)) {
+            log('Injetando tradução e botão Reiniciar na bandeja do sistema (dist/tray.js)...');
+            let trayContent = fs.readFileSync(trayPath, 'utf-8');
+
+            const buildTemplateTarget = 'contextMenu = electron_1.Menu.buildFromTemplate(actions);';
+            const newTrayInjection = `/* --- ANTIGRAVITY PT-BR TRAY START --- */
     if (Array.isArray(actions)) {
         for (const act of actions) {
             if (act.label) {
@@ -683,64 +853,67 @@ function _translateMenuTree(menuInstance) {
 /* --- ANTIGRAVITY PT-BR TRAY END --- */
     contextMenu = electron_1.Menu.buildFromTemplate(actions);`;
 
-        if (trayContent.includes(buildTemplateTarget)) {
-            trayContent = trayContent.replace(buildTemplateTarget, newTrayInjection);
+            if (trayContent.includes(buildTemplateTarget)) {
+                trayContent = trayContent.replace(buildTemplateTarget, newTrayInjection);
+            }
+
+            const trayRegex = /countItem\.label\s*=\s*[\s\S]*?' running';/;
+            if (trayRegex.test(trayContent)) {
+                trayContent = trayContent.replace(trayRegex, `countItem.label = count > 0 ? \`\${count} agente\${count === 1 ? '' : 's'} em execução\` : 'Nenhum agente em execução';`);
+            }
+
+            fs.writeFileSync(trayPath, trayContent, 'utf-8');
         }
 
-        const trayRegex = /countItem\.label\s*=\s*[\s\S]*?' running';/;
-        if (trayRegex.test(trayContent)) {
-            trayContent = trayContent.replace(trayRegex, `countItem.label = count > 0 ? \`\${count} agente\${count === 1 ? '' : 's'} em execução\` : 'Nenhum agente em execução';`);
+        // 7. Recompactar app.asar
+        log('Reempacotando app.asar traduzido...');
+        packedAsar = path.join(os.tmpdir(), `antigravity-repacked-${Date.now()}.asar`);
+        child_process.execSync(`${asarCmd} pack "${tempDir}" "${packedAsar}" --unpack-dir "**/node_modules/chrome-devtools-mcp/**"`, { stdio: 'pipe' });
+
+        if (!fs.existsSync(packedAsar)) {
+            throw new Error('Falha ao empacotar: repacked.asar não foi gerado.');
+        }
+        const stat = fs.statSync(packedAsar);
+        if (stat.size < 1000000) {
+            throw new Error(`Arquivo gerado repacked.asar parece corrompido ou incompleto (${stat.size} bytes). Operação abortada para segurança.`);
         }
 
-        fs.writeFileSync(trayPath, trayContent, 'utf-8');
-    }
-
-    // 7. Recompactar app.asar
-    log('Reempacotando app.asar traduzido...');
-    const packedAsar = path.join(os.tmpdir(), `antigravity-repacked-${Date.now()}.asar`);
-    child_process.execSync(`${asarCmd} pack "${tempDir}" "${packedAsar}" --unpack-dir "**/node_modules/chrome-devtools-mcp/**"`, { stdio: 'pipe' });
-
-    if (!fs.existsSync(packedAsar)) {
-        throw new Error('Falha ao empacotar: repacked.asar não foi gerado.');
-    }
-    const stat = fs.statSync(packedAsar);
-    if (stat.size < 1000000) {
-        throw new Error(`Arquivo gerado repacked.asar parece corrompido ou incompleto (${stat.size} bytes). Operação abortada para segurança.`);
-    }
-
-    try {
-        fs.copyFileSync(packedAsar, asarPath);
-    } catch (e) {
-        if (e.code === 'EACCES' || e.code === 'EPERM') {
-            throw new Error(`Permissão negada ao gravar em ${asarPath}. Execute com privilégios de administrador (sudo no Linux/macOS, ou como Administrador no Windows).`);
+        try {
+            fs.copyFileSync(packedAsar, asarPath);
+        } catch (e) {
+            if (e.code === 'EACCES' || e.code === 'EPERM') {
+                throw new Error(`Permissão negada ao gravar em ${asarPath}. Execute com privilégios de administrador (sudo no Linux/macOS, ou como Administrador no Windows).`);
+            }
+            throw e;
         }
-        throw e;
-    } finally {
-        try { fs.rmSync(packedAsar, { force: true }); } catch (_) {}
-    }
 
-    if (process.platform !== 'win32') {
-        try { fs.chmodSync(asarPath, 0o644); } catch (_) {}
-    }
+        if (process.platform !== 'win32') {
+            try { fs.chmodSync(asarPath, 0o644); } catch (_) {}
+        }
 
-    // Assinatura de código ad-hoc no macOS para evitar que o Gatekeeper bloqueie o app
-    if (process.platform === 'darwin') {
-        const appBundle = resDir.includes('.app') ? resDir.replace(/\/Contents\/Resources.*$/, '') : '/Applications/Antigravity.app';
-        if (fs.existsSync(appBundle)) {
-            log(`Assinando aplicativo ad-hoc no macOS (${appBundle})...`);
-            try {
-                child_process.execSync(`xattr -cr "${appBundle}"`, { stdio: 'pipe' });
-                child_process.execSync(`codesign --force --deep --sign - "${appBundle}"`, { stdio: 'pipe' });
-                log('Assinatura ad-hoc aplicada com sucesso no macOS.');
-            } catch (err) {
-                log(`Aviso ao re-assinar no macOS: ${err.message}. Se o app não abrir, execute no terminal: xattr -cr "${appBundle}" && codesign --force --deep --sign - "${appBundle}"`);
+        // Assinatura de código ad-hoc no macOS para evitar que o Gatekeeper bloqueie o app
+        if (process.platform === 'darwin') {
+            const appBundle = resDir.includes('.app') ? resDir.replace(/\/Contents\/Resources.*$/, '') : '/Applications/Antigravity.app';
+            if (fs.existsSync(appBundle)) {
+                log(`Assinando aplicativo ad-hoc no macOS (${appBundle})...`);
+                try {
+                    child_process.execSync(`xattr -cr "${appBundle}"`, { stdio: 'pipe' });
+                    child_process.execSync(`codesign --force --deep --sign - "${appBundle}"`, { stdio: 'pipe' });
+                    log('Assinatura ad-hoc aplicada com sucesso no macOS.');
+                } catch (err) {
+                    log(`Aviso ao re-assinar no macOS: ${err.message}.`);
+                }
             }
         }
-    }
 
-    // 8. Limpeza
-    fs.rmSync(tempDir, { recursive: true, force: true });
-    log('Tradução em Português (pt-BR) aplicada com sucesso no Antigravity 2.0!');
+        log('Tradução em Português (pt-BR) aplicada com sucesso no Antigravity 2.0!');
+    } finally {
+        if (packedAsar) {
+            try { fs.rmSync(packedAsar, { force: true }); } catch (_) {}
+            try { fs.rmSync(`${packedAsar}.unpacked`, { recursive: true, force: true }); } catch (_) {}
+        }
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (_) {}
+    }
 }
 
 run().catch((err) => {

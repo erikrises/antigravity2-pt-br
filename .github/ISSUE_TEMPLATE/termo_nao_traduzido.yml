@@ -1,0 +1,45 @@
+name: "Termo não traduzido"
+description: "Reporte um texto, botão ou diálogo que ainda aparece em inglês no Antigravity."
+title: "[i18n]: "
+labels: ["tradução", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por ajudar a aprimorar a tradução em Português do Brasil (pt-BR) do Antigravity!
+  - type: input
+    id: original_text
+    attributes:
+      label: Texto original em inglês
+      description: O texto exato em inglês exibido na interface.
+      placeholder: "Ex: Weekly Limit Remaining"
+    validations:
+      required: true
+  - type: input
+    id: suggested_translation
+    attributes:
+      label: Sugestão de tradução em pt-BR
+      description: Como este termo deveria ser traduzido naturalmente.
+      placeholder: "Ex: Limite Semanal Restante"
+    validations:
+      required: false
+  - type: input
+    id: location
+    attributes:
+      label: Onde o termo aparece?
+      description: Tela, menu, painel lateral, diálogo ou contexto.
+      placeholder: "Ex: Configurações > Modelos & Uso"
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: Versão do Antigravity e Sistema Operacional
+      placeholder: "Ex: Antigravity 2.25.0 no Linux (Debian 12) / Windows 11"
+    validations:
+      required: false
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Captura de tela (opcional)
+      description: Arraste e solte uma imagem mostrando o termo em inglês.

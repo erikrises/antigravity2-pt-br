@@ -16,7 +16,10 @@
   "scripts": {
     "install:ptbr": "node localization_engine.js",
     "restore": "node localization_engine.js --restore",
-    "test:dicts": "node -e \"const fs=require('fs'),path=require('path');const dir='./dicts';fs.readdirSync(dir).filter(f=>f.endsWith('.json')).forEach(f=>{JSON.parse(fs.readFileSync(path.join(dir,f),'utf8'));console.log(f, 'OK');});\""
+    "test:dicts": "node -e \"const fs=require('fs'),path=require('path');const dir='./dicts';fs.readdirSync(dir).filter(f=>f.endsWith('.json')).forEach(f=>{JSON.parse(fs.readFileSync(path.join(dir,f),'utf8'));console.log(f, 'OK');});\"",
+    "test:conflicts": "node tools/check_conflicts.js",
+    "test:syntax": "node -c localization_engine.js",
+    "test": "npm run test:dicts && npm run test:conflicts && npm run test:syntax"
   },
   "dependencies": {
     "@electron/asar": "^3.4.1"
