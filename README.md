@@ -138,6 +138,7 @@ Os termos traduzidos ficam organizados em arquivos modulares em `dicts/`:
 | `dicts/page_v218_extra.json` | Diagnósticos, Git, telemetria e novos módulos |
 | `dicts/web_ui.json` | Interface principal completa da aplicação web/desktop |
 | `dicts/v225_novidades.json` | Novas strings adicionadas na v2.25 (cotas Argon, tempo restante, etc.) |
+| `dicts/v226_novidades.json` | Novas strings adicionadas na v2.26 (MCP tools, wizard IDE, tarefas, áudio, etc.) |
 | `dicts/novidades.json` | Novas strings adicionadas incrementalmente |
 
 ---
